@@ -1,0 +1,7 @@
+venv/
+.env
+__pycache__/
+res/
+./res/fragrantica_cleaned_with_description.csv
+./res/metadata.json
+./res/embeddings_index.faiss
