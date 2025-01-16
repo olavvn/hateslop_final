@@ -31,21 +31,21 @@ mainaccord1;mainaccord2;mainaccord3;mainaccord4; mainaccord5}
 
 2. 결합 예시:
 
-        data['description'] = data.apply(
-            lambda row: (
-                f"Perfume: {row['Perfume']}, Brand: {row['Brand']}, "
-                f"Made in {row['Country']} in {row['Year']}" +
-                (f" by perfumer {row['Perfumer1']}" if pd.notna(row['Perfumer1']) else "") +
-                (f" and perfumer {row['Perfumer2']}" if pd.notna(row['Perfumer2']) else "") +
-                f", Gender: {row['Gender']}, Rating: {row['Rating Value']} out of 5 by {row['Rating Count']} votes, "
-                f"Top Notes: {row['Top']}, Middle Notes: {row['Middle']}, Base Notes: {row['Base']}, "
-                f"Main Accords: {', '.join(filter(pd.notna, [row['mainaccord1'], row['mainaccord2'], row['mainaccord3'], row['mainaccord4'], row['mainaccord5']]))}."
-            ),
-            axis=1
-        )
+        def generate_description(data):
+            data['description'] = data.apply(
+                lambda row: (
+                    f"{row['Perfume'].capitalize()} by {row['Brand'].capitalize()} is a {row['Gender']} fragrance featuring top notes of {row['Top']}, "
+                    f"middle notes of {row['Middle']}, and base notes of {row['Base']}. "
+                    f"The main accords are {', '.join(filter(pd.notna, [row['mainaccord1'], row['mainaccord2'], row['mainaccord3'], row['mainaccord4'], row['mainaccord5']]))}. "
+                    f"Released in {row['Year']} from {row['Country']}, this fragrance has a rating of {row['Rating Value']} out of 5 from {row['Rating Count']} votes. "
+                    f"{('Crafted by perfumer ' + row['Perfumer1'].capitalize() + '.') if pd.notna(row['Perfumer1']) else ''} {(' and ' + row['Perfumer2'].capitalize()) if pd.notna(row['Perfumer2']) else ''}"
+                ),
+                axis=1
+            )
+            return data
     description 예시
 
-            Perfume: ombre-platine, Brand: jean-charles-brosseau, Made in France in 2011 by perfumer thomas fontaine, Gender: women, Rating: 3.74 out of 5 by 159 votes, Top Notes: red apple, pink pepper, black currant, bergamot, Middle Notes: milk, coconut, tuberose, plum, lily, Base Notes: vanille, peru balsam, sandalwood, virginia cedar, Main Accords: lactonic, fruity, sweet, vanilla, woody.
+           'Peace love and juicy couture by juicy couture is a women fragrance featuring top notes of hyacinth, cassis, red apple, amalfi lemon, middle notes of red poppy, lime (linden) blossom, honeysuckle, jasmine, magnolia, and base notes of musk, patchouli, orris root. The main accords are floral, green, fruity, sweet, powdery. Released in 2010 from USA, this fragrance has a rating of 3.36 out of 5 from 1905 votes. Crafted by perfumer Rodrigo flores-roux. '
 #### 3.2 그래프 구성
 
 1. 노드 정의: 각 향수를 하나의 노드로 표현.
