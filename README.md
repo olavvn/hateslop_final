@@ -179,7 +179,7 @@ mainaccord1;mainaccord2;mainaccord3;mainaccord4; mainaccord5}
     - Query의 의미를 이해하고, 이를 데이터 필터링 조건으로 변환하는 의미 기반 매핑 모델
     <br>
     (Semantic Mapping Model)을 학습 -> query를 json형태로 정규화한 뒤에 임베딩과 비교.
-3. 기타 적용 사항
+3. 기타 예정정 사항
     - webpage의 검색 쿼리에 적용
         - url: https://olavvn.github.io/pour_monsieur_web/
 
