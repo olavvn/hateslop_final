@@ -1,185 +1,152 @@
-# 그래프 기반 향수 추천 시스템
+# **향수 추천 시스템: What’s in My Scent?**
+### **STS 기반 향수 추천 시스템**
+📌 **최종 프로젝트 보고서 - 김도훈**
 
-### 김도훈
+---
 
-### 1. 목표
-- 인풋: 사용자가 입력한 자연어 설명(예: "I want a floral perfume with jasmine and rose.").
+## **📌 목차**
+1. **소개 (Introduction)**
+   - 연구 배경
+   - 연구 목표
+2. **학습 과정 (Training)**
+   - 원본 데이터 및 전처리
+   - FastText 학습
+   - Sentence Transformer 학습
+   - Cross Encoder 학습
+3. **결과 (Results)**
+   - Sentence Transformer 평가
+   - Cross Encoder 평가
+4. **응용 (Application)**
+   - 향수 검색 시스템 구성
+   - 검색 알고리즘
+   - 데모 링크
+5. **추가 연구 (Further Research)**
+   - 오버피팅 완화
+   - 웹 서비스 제공
+   - 코드 최적화
+6. **참고문헌 (References)**
 
-- 아웃풋: 입력과 가장 유사한 향수 정보를 포함한 추천 결과.
+---
 
-- 추가 목표: 멀티모달 입력(예: 이미지, 리뷰)으로 확장 가능한 시스템 설계.
-### 2. 데이터
-#### 2.1 데이터 출처
-- fragrantica.com에서 얻은 향수 데이터.
-- kaggle에서 구함.
-#### 2.1 데이터 구조
+## **📌 1. 소개 (Introduction)**
 
+### **🔹 연구 배경**
+- 후각(olfaction)은 다른 감각과 비교해 연구가 부족하며, 언어적 표현이 미비함 *(서종석, 2012)*.
+- 향의 지각적 관계를 유지하면서 새로운 향의 특성을 예측할 수 있는 **Principal Odor Map(POM)** 개발 *(Brian K. Lee et al., 2022)*.
+- 향수 선택은 개인적인 경험과 주관적 취향이 반영되므로, 기존의 추천 시스템보다 더 정밀한 모델이 필요함.
 
-- {url;Perfume;Brand;Country;Gender;Rating Value;
-Rating Count;Year;Top;Middle;Base;Perfumer1;Perfumer2;
-mainaccord1;mainaccord2;mainaccord3;mainaccord4; mainaccord5}
-의 정보가 포함됨.
+### **🔹 연구 목표**
+- **입력**: 사용자의 **모호한 향수 표현**  
+- **출력**: 향수의 **명확한 추천 제품 리스트**  
+- **사용 기술**: **Sentence Transformer 기반 STS(Semantic Text Similarity) 모델**을 활용하여 향수 추천 정확도를 높임.
 
-- 약 24000개의 향수 데이터가 있음.
-- 리뷰 요약, 사용자 피드백, 이미지 등의 확장 가능성.
+---
 
-### 3. 시스템 설계 계획
+## **📌 2. 학습 과정 (Training)**
 
-#### 3.1 데이터 전처리
+### **🔹 원본 데이터**
+- **사용 데이터셋**: `olgagmiufana1/fragrantica-com-fragrance-dataset/fra_cleaned.csv`
+- **향수 및 설명 데이터(PND, Perfume and Description) 활용**  
+  - 기존 연구 *(Jooyoung Kim et al.)* 에서 수집한 데이터
+  - 향수의 성분(노트)과 사용자의 서술적 설명 포함
 
-1. 텍스트 통합: 주요 필드(Brand, Top, Middle, Base, Main Accords)를 결합하여 자연어 임베딩의 입력으로 활용.
+### **🔹 데이터 전처리 (Data Preprocessing)**
+**📌 주요 데이터셋 구성**
+- `fra_cleaned`: 원본 데이터 정리  
+- `fragrantica_database`: 향수 노트와 설명 통합  
+- `pnd_examples`: 기존 향수 설명 데이터  
+- `pnd_gpt`: GPT-4o-mini를 이용해 생성한 추가 설명 데이터  
+- `prediction_train`: 향수 설명과 노트를 연결하는 학습 데이터  
+- `training_pairs`: 긍정/부정 학습 쌍 생성  
+- `corpus`: 문장 임베딩을 위한 텍스트 데이터  
 
-2. 결합 예시:
+**📌 주요 전처리 과정**
+1. **랜덤 샘플링 (Random Sampling)**:  
+   - `fragrantica_database.csv`에서 300개 이상의 샘플 선택  
+2. **GPT-4o-mini를 이용한 설명 생성**:  
+   - 기존 향수 설명과 일관된 스타일로 새로운 설명 추가  
+3. **향수 노트 표준화**:  
+   - 중복되는 향 노트 정리 및 표준화  
 
-        def generate_description(data):
-            data['description'] = data.apply(
-                lambda row: (
-                    f"{row['Perfume'].capitalize()} by {row['Brand'].capitalize()} is a {row['Gender']} fragrance featuring top notes of {row['Top']}, "
-                    f"middle notes of {row['Middle']}, and base notes of {row['Base']}. "
-                    f"The main accords are {', '.join(filter(pd.notna, [row['mainaccord1'], row['mainaccord2'], row['mainaccord3'], row['mainaccord4'], row['mainaccord5']]))}. "
-                    f"Released in {row['Year']} from {row['Country']}, this fragrance has a rating of {row['Rating Value']} out of 5 from {row['Rating Count']} votes. "
-                    f"{('Crafted by perfumer ' + row['Perfumer1'].capitalize() + '.') if pd.notna(row['Perfumer1']) else ''} {(' and ' + row['Perfumer2'].capitalize()) if pd.notna(row['Perfumer2']) else ''}"
-                ),
-                axis=1
-            )
-            return data
-    description 예시
+---
 
-           'Peace love and juicy couture by juicy couture is a women fragrance featuring top notes of hyacinth, cassis, red apple, amalfi lemon, middle notes of red poppy, lime (linden) blossom, honeysuckle, jasmine, magnolia, and base notes of musk, patchouli, orris root. The main accords are floral, green, fruity, sweet, powdery. Released in 2010 from USA, this fragrance has a rating of 3.36 out of 5 from 1905 votes. Crafted by perfumer Rodrigo flores-roux. '
-#### ~~3.2 그래프 구성~~
+### **🔹 FastText 학습**
+- **목적**: 향수 노트 간의 유사도를 학습하여, 추천 정확도를 높임.
+- **방식**:
+  1. `prediction_train`에서 향수 설명을 추출하여 `corpus` 생성
+  2. Gensim의 **FastText 모델**을 사용하여 학습 (Word2Vec보다 향상된 방식)
 
-1. 노드 정의: 각 향수를 하나의 노드로 표현.
+---
 
-2. 엣지 정의: 향수 간의 유사도(예: 코사인 유사도) 기반 연결.
+### **🔹 Sentence Transformer 학습**
+- **목적**: 향수 설명을 바탕으로 특정 향수 노트를 예측하는 신경망 구축.
+- **모델 구조**:
+  - `sentence-transformers/all-MiniLM-L6-v2` 기반으로 문장 내 의미적 관계를 학습.
+- **학습 데이터 구성**
+  - **긍정 페어 (Positive Pair)**: 향수 설명과 실제 포함된 노트  
+  - **부정 페어 (Negative Pair)**: 향수 설명과 포함되지 않은 노트  
 
-3. 그래프 구축 방법:
+---
 
-    - 노드: 향수 데이터에서 생성된 임베딩.
+### **🔹 Cross Encoder 학습**
+- **목적**: 문장 간 유사도를 보다 정확하게 계산하도록 최적화.
+- **사용 모델**: `cross-encoder/stsb-roberta-large`
+- **학습 데이터**:
+  - STS(Semantic Text Similarity) 데이터셋 활용
+  - Sentence Transformer 학습 데이터 활용
 
-    - 엣지: 유사도 임계값(예: 0.6) 이상인 노드 간 연결.
+---
 
-#### 3.3 임베딩 생성
+## **📌 3. 결과 (Results)**
 
-1. 텍스트 임베딩:
+### **🔹 Sentence Transformer 평가**
+- **코사인 유사도(Cosine Similarity) 기준 정확도 비교**:
+  ```
+  Version 3 > Version 2 > Version 1 > Version 4
+  ```
+- **문제점**:
+  - 데이터 다양성 부족 → 일부 모델에서 **과적합(Overfitting) 발생**
 
-    - 모델: Sentence-BERT (예: all-MiniLM-L6-v2) or OpenAI Encoder(text-embedding-ada-002).
-        - all-MiniLM-L6-v2
-            - 성능과 속도의 균형: 
-            <br>
-            대형 모델(예: BERT, RoBERTa) 대비 약 2-3배 빠른 추론 속도를 제공하면서도, 텍스트 유사도 계산에서 우수한 성능을 유지
-            - 메모리 효율성:
-            <br>
-                BERT 기반 모델보다 메모리 요구량이 적어, GPU(T4 등)에서 대규모 데이터 처리에 적합.
-            <br>
-                하나의 GPU에서 많은 문장을 배치로 처리할 수 있어 24000개 이상의 향수 데이터를 빠르게 임베딩 가능.
-                
-        - 
+### **🔹 Cross Encoder 평가**
+- **STS 데이터셋을 활용한 정확도 비교**:
+  ```
+  Version 3 > Version 2 > Version 1 > Version 4
+  ```
 
-    - 각 향수의 설명을 입력으로 사용하여 고차원 벡터 생성.
+---
 
-    ~~2. 그래프 임베딩:~~
+## **📌 4. 응용 (Application)**
 
-    - 기법: Node2Vec, GraphSAGE, 또는 DeepWalk.
+### **🔹 향수 검색 시스템 구성**
+- **입력**: 브랜드, 국가, 성별, 향수 설명  
+- **출력**: 적절한 향수 추천 리스트  
+- **검색 과정**:
+  1. 사용자의 입력 데이터를 Transformer v4 모델을 통해 벡터화
+  2. **FAISS (Facebook AI Similarity Search)** 를 활용하여 유사 향수 검색
+  3. Cross Encoder를 이용한 추가 필터링
 
-    - 그래프의 구조적 정보를 반영한 노드 임베딩 생성.
+---
 
+### **🔹 데모 링크**
+📌 [Google Colab](https://colab.research.google.com/drive/1oUCJ_aEKqFQh1j8k2T4ImHL136DeLQsK?usp=sharing)
 
-### 4. 기술 스택
+---
 
-1. 프로그래밍 언어: Python
+## **📌 5. 추가 연구 (Further Research)**
 
-2. 필요 라이브러리:
+1. **오버피팅 완화**:
+   - 향수 설명 데이터의 다양성 증가
+   - 학습 데이터 증강 (Data Augmentation) 기법 추가  
+2. **웹 서비스 제공**:
+   - 벡터 데이터베이스(VectorDB) 구축  
+   - FastAPI를 활용한 API 서비스 개발  
+   - [웹사이트 예시](https://olavvn.github.io/pour_monsieur_web/)  
+3. **코드 최적화**:
+   - 객체 지향 프로그래밍(OOP) 방식 개선  
+   - **RAG (Retrieval-Augmented Generation) 모델 개선**  
 
-    - 데이터 처리: pandas, numpy
+---
 
-    - 그래프: networkx, node2vec, py2neo
-
-    - 딥러닝: sentence-transformers, sklearn
-
-    - 데이터베이스: Neo4j (그래프 DB 저장)
-
-### 5.1 진행 과정 - 설명 임베딩과 유사도 측정을 통한 추천 시스템
-
-#### 5.1.1 데이터 전처리
-1. 텍스트 통합: 주요 필드(Brand, Top, Middle, Base, Main Accords)를 결합하여 자연어 임베딩의 입력으로 활용.
-
-2. 결합 예시는 3.1.2의 전처리 방식 차용. 다음은 생성된 description의 예시
-
-- description:
-
-           'Peace love and juicy couture by juicy couture is a women fragrance featuring top notes of hyacinth, cassis, red apple, amalfi lemon, middle notes of red poppy, lime (linden) blossom, honeysuckle, jasmine, magnolia, and base notes of musk, patchouli, orris root. The main accords are floral, green, fruity, sweet, powdery. Released in 2010 from USA, this fragrance has a rating of 3.36 out of 5 from 1905 votes. Crafted by perfumer Rodrigo flores-roux. '
-
-#### 5.1.2 임베딩 생성
-1. Sentence-BERT (all-MiniLM-L6-v2)
-
-    Sentence Transformer를 이용해 각 향수의 description을 임베딩으로 변환(768차원).
-    <br>
-    embeddings_index.faiss로 저장하고 metadata.json에 다른 metadata와 함께 저장.
-    <br>
-    이후 동일한 모델로 입력받은 query의 임베딩 생성한 뒤 search method로 유사도 높은 3가지 description 출력.
-    
-    - 장점: 시간이 덜 걸림, 이후 파인튜닝 할 수 있음, 무료임
-    - 단점: 차원이 비교적 작음. 유사도가 낮게 측정됨. 정보 필터링 능력 부족
-
-            Enter your query: tom ford perfume made earlier than 2015
-
-        Result 1:
-        Description: Tom ford for men by Tom ford is a men fragrance featuring top notes of lemon leaf oil, ginger, mandarin orange, bergamot, basil, violet leaf, middle notes of tobacco leaf, pepper, tunisian orange blossom, grapefruit blossom, and base notes of amber, cedar, vetiver, virginian patchouli, oakmoss, leather, cypriol oil or nagarmotha. The main accords are citrus, warm spicy, woody, fresh spicy, aromatic. Released in 2007 from USA, this fragrance has a rating of 4.04 out of 5 from 2313 votes. Crafted by perfumer Yves cassar. 
-        Similarity Score: 0.32
-        More information: https://www.fragrantica.com/perfume/tom-ford/tom-ford-for-men-1172.html
-
-        Result 2:
-        Description: London by Tom ford is a unisex fragrance featuring top notes of cumin, saffron, cardamom, black pepper, coffee, coriander, middle notes of incense, labdanum, jasmine, geranium, and base notes of agarwood (oud), birch, cedar, musk, amyris. The main accords are warm spicy, fresh spicy, amber, smoky, woody. Released in 2013 from USA, this fragrance has a rating of 4.0 out of 5 from 783 votes.  
-        Similarity Score: 0.15
-        More information: https://www.fragrantica.com/perfume/tom-ford/london-18883.html
-
-        Result 3:
-        Description: Noir by Tom ford is a men fragrance featuring top notes of violet, pink pepper, caraway, bergamot, verbena, middle notes of tuscan iris, bulgarian rose, black pepper, nutmeg, geranium, clary sage, and base notes of indonesian patchouli leaf, amber, vanilla, civet, leather, opoponax, benzoin, vetiver, styrax. The main accords are amber, powdery, fresh spicy, woody, violet. Released in 2012 from USA, this fragrance has a rating of 4.04 out of 5 from 3786 votes. Crafted by perfumer Olivier gillotin. 
-        Similarity Score: 0.13
-        More information: https://www.fragrantica.com/perfume/tom-ford/noir-15727.html
-
-2. Sentence-BERT (all-MiniLM-L6-v2)
-
-    Sentence Transformer를 이용해 각 향수의 description을 임베딩으로 변환(1536차원).
-    <br>
-    사용량으로 인하여 batch size: 50으로 나눠서 임베딩 변환 작업 진행.
-    <br>
-    embeddings_index_openai.faiss로 저장하고 metadata_openai.json에 다른 metadata와 함께 저장.
-    <br>
-    이후 동일한 모델로 입력받은 query의 임베딩 생성한 뒤 search method로 유사도 높은 3가지 description 출력.
-    
-    - 장점: 차원이 큼. 정확도 및 유사도가 높음.
-    - 단점: 시간이 오래 걸림. 비용이 듦. 향후 파인튜닝 작업 제한. 정보 필터링 능력 아직 부족
-
-            Enter your query: tom ford perfume made earlier than 2015
-
-        
-        Result 1:
-        Description: Tom ford for men by Tom ford is a men fragrance featuring top notes of lemon leaf oil, ginger, mandarin orange, bergamot, basil, violet leaf, middle notes of tobacco leaf, pepper, tunisian orange blossom, grapefruit blossom, and base notes of amber, cedar, vetiver, virginian patchouli, oakmoss, leather, cypriol oil or nagarmotha. The main accords are citrus, warm spicy, woody, fresh spicy, aromatic. Released in 2007 from USA, this fragrance has a rating of 4.04 out of 5 from 2313 votes. Crafted by perfumer Yves cassar. 
-        Similarity Score: 0.69
-        More information: https://www.fragrantica.com/perfume/tom-ford/tom-ford-for-men-1172.html
-
-        Result 2:
-        Description: Fucking fabulous by Tom ford is a unisex fragrance featuring top notes of lavender, clary sage, middle notes of leather, bitter almond, vanilla, orris, and base notes of leather, tonka bean, cashmeran, white woods, amber. The main accords are aromatic, leather, vanilla, almond, amber. Released in 2017 from USA, this fragrance has a rating of 3.8 out of 5 from 6592 votes.  
-        Similarity Score: 0.66
-        More information: https://www.fragrantica.com/perfume/tom-ford/fucking-fabulous-46513.html
-
-        Result 3:
-        Description: Tobacco oud by Tom ford is a unisex fragrance featuring top notes of whiskey, middle notes of spicy notes, cinnamon, coriander, and base notes of tobacco, agarwood (oud), incense, sandalwood, patchouli, benzoin, vanilla, cedar. The main accords are warm spicy, tobacco, woody, whiskey, oud. Released in 2013 from USA, this fragrance has a rating of 4.2 out of 5 from 3433 votes. Crafted by perfumer Olivier gillotin. 
-        Similarity Score: 0.66
-        More information: https://www.fragrantica.com/perfume/tom-ford/tobacco-oud-21402.html
-    
-#### 5.1.3 결과 분석 및 해결 과제
-1. 결과 분석
-    - description에 명시 되어 있는 정보에 대하여는 판단을 양호하게 진행
-    - description에 포함되어 있지 않은 정보에 대한 inference 능력 없음
-    - 범주형 정보에 관한 판단이 잘 안 됨(ex. rating, launched year 등 범위에 관한 정보 등)
-2. 해결 방안
-    - feature을 늘림(가격, 계절감, 지속력 등등 몇가지 정보 추가(가능하다면))
-    - Query의 의미를 이해하고, 이를 데이터 필터링 조건으로 변환하는 의미 기반 매핑 모델
-    <br>
-    (Semantic Mapping Model)을 학습 -> query를 json형태로 정규화한 뒤에 임베딩과 비교.
-3. 기타 예정정 사항
-    - webpage의 검색 쿼리에 적용
-        - url: https://olavvn.github.io/pour_monsieur_web/
-
+## **📌 6. 참고문헌 (References)**
+- **Kim, Jooyoung et al. (2024).** *NLP-Based Perfume Note Estimation Based on Descriptive Sentences*. [DOI](https://doi.org/10.3390/app14209293)
+- **Brian K. Lee et al. (2022).** *A Principal Odor Map Unifies Diverse Tasks in Human Olfactory Perception*. [DOI](https://doi.org/10.1101/2022.09.01.504602)
